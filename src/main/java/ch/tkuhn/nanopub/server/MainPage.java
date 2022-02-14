@@ -1,8 +1,9 @@
 package ch.tkuhn.nanopub.server;
 
-import java.io.IOException;
+import ch.tkuhn.nanopub.server.storage.NanopubStorageFactory;
 
 import javax.servlet.http.HttpServletResponse;
+import java.io.IOException;
 
 public class MainPage extends Page {
 
@@ -49,7 +50,7 @@ public class MainPage extends Page {
 			println("<ul>");
 			long npc = ServerConf.getInfo().getNextNanopubNo();
 			println("<li><a href=\"" + NanopubListPage.PAGE_NAME + ".html\">Nanopubs: " + npc + "</a></li>");
-			long peerc = NanopubDb.get().getPeerCollection().count();
+			long peerc = NanopubStorageFactory.getInstance().getPeerUris().size();
 			println("<li><a href=\"" + PeerListPage.PAGE_NAME + ".html\">Peers: " + peerc + "</a></li>");
 			println("</ul>");
 			println("<p>Actions:");

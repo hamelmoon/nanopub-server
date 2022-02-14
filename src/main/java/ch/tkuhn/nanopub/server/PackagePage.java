@@ -1,5 +1,7 @@
 package ch.tkuhn.nanopub.server;
 
+import ch.tkuhn.nanopub.server.storage.NanopubStorageFactory;
+
 import java.io.IOException;
 
 import javax.servlet.http.HttpServletResponse;
@@ -21,8 +23,7 @@ public class PackagePage extends Page {
 			getResp().sendError(400, "Invalid extension: " + req.getExtension());
 			return;
 		}
-		NanopubDb db = NanopubDb.get();
-		synchronized(db) {
+		synchronized(NanopubStorageFactory.getInstance()) {
 			String[] paramValues = req.getHttpRequest().getParameterValues("page");
 			if (paramValues != null && paramValues.length > 0) {
 				pageNo = Integer.parseInt(paramValues[0]);
@@ -44,7 +45,7 @@ public class PackagePage extends Page {
 				getResp().addHeader("Content-Disposition", "attachment; filename=\"package" + pageNo + ".trig\"");
 				gzipped = false;
 			}
-			NanopubDb.get().writePackageToStream(pageNo, gzipped, getResp().getOutputStream());
+			NanopubStorageFactory.getInstance().writePackageToStream(pageNo, gzipped, getResp().getOutputStream());
 		} catch (IllegalArgumentException ex) {
 			getResp().sendError(400, "Invalid argument: " + ex.getMessage());
 		}

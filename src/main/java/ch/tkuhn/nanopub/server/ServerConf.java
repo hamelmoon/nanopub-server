@@ -4,6 +4,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Properties;
 
+import ch.tkuhn.nanopub.server.storage.mongodb.NanopubStorageMongoImpl;
+import com.google.common.base.Strings;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -28,7 +30,7 @@ public class ServerConf {
 	private ServerInfo info;
 	private String[] postUrls;
 
-	private ServerConf() {
+	public ServerConf() {
 		conf = new Properties();
 		loadProperties("conf.properties");
 		loadProperties("local.conf.properties");
@@ -43,7 +45,7 @@ public class ServerConf {
 			try {
 				tempProp.load(in);
 			} catch (IOException ex) {
-				LoggerFactory.getLogger(NanopubDb.class).error(ex.getMessage(), ex);
+				LoggerFactory.getLogger(NanopubStorageMongoImpl.class).error(ex.getMessage(), ex);
 				System.exit(1);
 			}
 			for (Object k : tempProp.keySet()) {
@@ -65,7 +67,7 @@ public class ServerConf {
 		}
 	}
 
-	public boolean isRunAsLocalServerEnabled() {
+	public Boolean isRunAsLocalServerEnabled() {
 		return Boolean.parseBoolean(conf.getProperty("run.as.local.server"));
 	}
 
@@ -151,4 +153,41 @@ public class ServerConf {
 		}
 		return postUrls;
 	}
+
+
+	public String getStorageType() {
+		return conf.getProperty("storage.type").toLowerCase();
+	}
+
+	public String getIpfsHost() {
+		return conf.getProperty("ipfs.host");
+	}
+
+	public int getIpfsPort() {
+		return Integer.parseInt(conf.getProperty("ipfs.port"));
+	}
+
+	public String getIpfsProtocol() {
+		return conf.getProperty("ipfs.protocol");
+	}
+
+	public int getIpfsTimeout() {
+		return Integer.parseInt(conf.getProperty("ipfs.timeout"));
+	}
+
+	public String getIpfsRootCidPropertiesPath() {
+		String path = conf.getProperty("ipfs.roocid.path");
+		if(Strings.isNullOrEmpty(path)) return "rootcid.properties";
+		else return path;
+	}
+
+
+	public int getIpfsRetryDelay() {
+		return 1;
+	}
+
+	public int getIpfsRetryMaxRetry() {
+		return 2;
+	}
+
 }

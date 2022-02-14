@@ -4,6 +4,7 @@ import java.io.IOException;
 
 import javax.servlet.http.HttpServletResponse;
 
+import ch.tkuhn.nanopub.server.storage.NanopubStorageFactory;
 import net.trustyuri.TrustyUriUtils;
 
 public class NanopubListPage extends Page {
@@ -25,19 +26,18 @@ public class NanopubListPage extends Page {
 
 	public NanopubListPage(ServerRequest req, HttpServletResponse httpResp) {
 		super(req, httpResp);
-		NanopubDb db = NanopubDb.get();
-		synchronized(db) {
-			pageSize = db.getJournal().getPageSize();
-			lastPage = db.getJournal().getCurrentPageNo();
-			nextNpNo = db.getNextNanopubNo();
+		synchronized(NanopubStorageFactory.getInstance()) {
+			pageSize = NanopubStorageFactory.getInstance().getJournal().getPageSize();
+			lastPage = NanopubStorageFactory.getInstance().getJournal().getCurrentPageNo();
+			nextNpNo = NanopubStorageFactory.getInstance().getNextNanopubNo();
 			String[] paramValues = req.getHttpRequest().getParameterValues("page");
 			if (paramValues != null && paramValues.length > 0) {
 				pageNo = Integer.parseInt(paramValues[0]);
 			} else {
 				pageNo = lastPage;
 			}
-			pageContent = db.getJournal().getPageContent(pageNo);
-			getResp().addHeader("ETag", "W/\"" + db.getJournal().getStateId() + "\"");
+			pageContent = NanopubStorageFactory.getInstance().getJournal().getPageContent(pageNo);
+			getResp().addHeader("ETag", "W/\"" + NanopubStorageFactory.getInstance().getJournal().getStateId() + "\"");
 		}
 		setCanonicalLink("/" + PAGE_NAME + "?page=" + pageNo);
 		getResp().addHeader("Link", "<" + PAGE_NAME + "?page=1>; rel=\"start\"");

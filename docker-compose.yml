@@ -1,24 +1,49 @@
 version: '2'
 services:
+  db:
+    image: nanopub/mongo
+    #image: mongo
+    ports:
+      - 27017:27017
+    restart: unless-stopped
+    volumes:
+      - ./data/mongodb:/data/db  # specify the host directory for the database here
+
+  storage:
+    image: ipfs/go-ipfs:latest
+    restart: unless-stopped
+    ports:
+      - 4001:4001 # ipfs swarm - expose if needed/wanted
+      - 5001:5001 # ipfs api - expose if needed/wanted
+    volumes:
+      - ./data/storage:/data/ipfs
+    # https://docs.docker.com/compose/compose-file/compose-file-v3/#command
+    # https://github.com/ipfs/go-ipfs/blob/91c52657166bcf86f2476926e4fe56694dc26562/Dockerfile#L115
+    command:
+      [
+          'daemon',
+          '--migrate=true',
+          '--agent-version-suffix=docker',
+          '--enable-pubsub-experiment',
+          '--enable-gc'
+      ]
   nanopub:
     build: .
     #image: nanopub/server
     restart: unless-stopped
     depends_on:
       - db
+      - storage
     environment:
-      - NPS_MONGODB_HOST=db
+      - NPS_STORAGE_TYPE=ipfs
+      #      - NPS_MONGODB_HOST=db
+      - NPS_IPFS_HOST=storage
       - NPS_COLLECT_NANOPUBS_ENABLED=true  # nanopubs are collected from other servers (needs about 60GB of disk space, or possibly more)
-      - NPS_PUBLIC_URL=http://your.domain.com/path/  # replace this with the URL where this server is publicly accessible; needs to end with /
+      - NPS_PUBLIC_URL=http://seoul-nanopub.stat.ooo/  # replace this with the URL where this server is publicly accessible; needs to end with /
       - NPS_ADMIN=  # you can add admin info here, e.g. Tobias Kuhn <kuhntobias@gmail.com> (optional)
       - NPS_LOAD_DIR=/data/dropbox/
     ports:
-      - 8080:8080
+      - 80:8080
     volumes:
       - ./load:/data/dropbox/  # specify the host directory from which files of nanopublications are automatically loaded
-  db:
-    image: nanopub/mongo
-    #image: mongo
-    restart: unless-stopped
-    volumes:
-      - ./data/mongodb:/data/db  # specify the host directory for the database here
+      - ./data/nps:/tmp/nps

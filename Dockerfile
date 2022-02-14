@@ -6,7 +6,7 @@ COPY src /nanopub-server/src
 COPY pom.xml /nanopub-server
 
 # Build with maven
-RUN mvn -f /nanopub-server/pom.xml clean package
+RUN mvn -f /nanopub-server/pom.xml clean package -Dmaven.test.skip
 
 # Pull base image
 FROM tomcat:8-jre8

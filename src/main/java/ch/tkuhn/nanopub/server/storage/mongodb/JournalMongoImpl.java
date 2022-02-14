@@ -1,7 +1,11 @@
-package ch.tkuhn.nanopub.server;
+package ch.tkuhn.nanopub.server.storage.mongodb;
 
 import java.util.Random;
 
+import ch.tkuhn.nanopub.server.NanopubServerUtils;
+import ch.tkuhn.nanopub.server.ServerConf;
+import ch.tkuhn.nanopub.server.storage.CollectionTypeEnum;
+import ch.tkuhn.nanopub.server.storage.Journal;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -10,19 +14,18 @@ import com.mongodb.DB;
 import com.mongodb.DBCollection;
 import com.mongodb.DBCursor;
 
-public class Journal {
+public class JournalMongoImpl implements Journal {
 
 	private final long journalId;
 	private final int pageSize;
 	private final String uriPattern;
 	private final String hashPattern;
 	private long nextNanopubNo = -1;
-
 	private DB db;
 
 	private Logger logger = LoggerFactory.getLogger(this.getClass());
 
-	public Journal(DB db) {
+	public JournalMongoImpl(DB db) {
 		this.db = db;
 		init();
 		long j = Long.parseLong(getField("journal-id"));
@@ -39,7 +42,7 @@ public class Journal {
 	}
 
 	private void init() {
-		if (!db.getCollectionNames().contains("journal")) {
+		if (!db.getCollectionNames().contains(CollectionTypeEnum.Journal.toString())) {
 			logger.info("No journal found: Create new one");
 			setField("journal-version", NanopubServerUtils.journalVersion);
 			setField("journal-id", Math.abs(new Random().nextLong()) + "");
@@ -73,7 +76,7 @@ public class Journal {
 		logger.info("Journal upgraded to version " + NanopubServerUtils.journalVersion);
 	}
 
-	public long getId() {
+	public long getJournalId() {
 		return journalId;
 	}
 
@@ -113,11 +116,11 @@ public class Journal {
 	}
 
 	private DBCollection getJournalCollection() {
-		return db.getCollection("journal");
+		return db.getCollection(CollectionTypeEnum.Journal.toString());
 	}
 
 	public synchronized String getStateId() {
-		return getId() + "/" + getNextNanopubNo();
+		return getJournalId() + "/" + getNextNanopubNo();
 	}
 
 	public synchronized int getVersionValue() {

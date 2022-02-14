@@ -8,4 +8,4 @@
 *.log
 local.*
 /src/main/resources/log4j.properties
-/docker-compose.override.yml
+rootcid.properties

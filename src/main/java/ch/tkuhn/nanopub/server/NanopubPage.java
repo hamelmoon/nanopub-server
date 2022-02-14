@@ -9,6 +9,7 @@ import java.util.List;
 
 import javax.servlet.http.HttpServletResponse;
 
+import ch.tkuhn.nanopub.server.storage.NanopubStorageFactory;
 import org.apache.commons.lang.StringEscapeUtils;
 import org.eclipse.rdf4j.model.IRI;
 import org.eclipse.rdf4j.model.Statement;
@@ -31,6 +32,7 @@ public class NanopubPage extends Page {
 
 	private Logger logger = LoggerFactory.getLogger(this.getClass());
 
+
 	public static void show(ServerRequest req, HttpServletResponse httpResp) throws IOException {
 		NanopubPage obj = new NanopubPage(req, httpResp);
 		obj.show();
@@ -44,7 +46,7 @@ public class NanopubPage extends Page {
 		Nanopub nanopub;
 		String ac = getReq().getArtifactCode();
 		try {
-			nanopub = NanopubDb.get().getNanopub(ac);
+			nanopub = NanopubStorageFactory.getInstance().getNanopub(ac);
 		} catch (Exception ex) {
 			getResp().sendError(500, "Internal error: " + ex.getMessage());
 			logger.error(ex.getMessage(), ex);

@@ -2,9 +2,9 @@ package ch.tkuhn.nanopub.server;
 
 import java.io.File;
 
+import ch.tkuhn.nanopub.server.storage.NanopubStorageFactory;
 import org.nanopub.MultiNanopubRdfHandler;
 import org.nanopub.MultiNanopubRdfHandler.NanopubHandler;
-import org.nanopub.extra.server.NanopubSurfacePattern;
 import org.nanopub.Nanopub;
 import org.eclipse.rdf4j.rio.RDFFormat;
 import org.eclipse.rdf4j.rio.Rio;
@@ -16,8 +16,6 @@ public class LoadFiles implements Runnable {
 	private static LoadFiles running;
 	private static Thread thread;
 
-	private static NanopubDb db = NanopubDb.get();
-	private static NanopubSurfacePattern ourPattern = ServerConf.getInfo().getNanopubSurfacePattern();
 
 	public static synchronized void check() {
 		if (running != null) {
@@ -90,9 +88,9 @@ public class LoadFiles implements Runnable {
 				MultiNanopubRdfHandler.process(format, processingFile, new NanopubHandler() {
 					@Override
 					public void handleNanopub(Nanopub np) {
-						if (!ourPattern.matchesUri(np.getUri().toString())) return;
+						if (!ServerConf.getInfo().getNanopubSurfacePattern().matchesUri(np.getUri().toString())) return;
 						try {
-							db.loadNanopub(np);
+							NanopubStorageFactory.getInstance().loadNanopub(np);
 						} catch (Exception ex) {
 							logger.error("Failed to load nanopublication", ex);
 						}

@@ -1,7 +1,12 @@
 package ch.tkuhn.nanopub.server;
 
+import ch.tkuhn.nanopub.server.storage.Journal;
+import ch.tkuhn.nanopub.server.storage.NanopubStorageFactory;
+import com.google.inject.Singleton;
+
 import java.util.Properties;
 
+@Singleton
 public class ServerInfo extends org.nanopub.extra.server.ServerInfo {
 
 	private static final long serialVersionUID = 3460590224836603269L;
@@ -12,8 +17,6 @@ public class ServerInfo extends org.nanopub.extra.server.ServerInfo {
 
 	private transient boolean loadFromDb = false;
 
-	public ServerInfo() {
-	}
 
 	public ServerInfo(Properties prop) {
 		protocolVersion = NanopubServerUtils.protocolVersion;
@@ -37,7 +40,7 @@ public class ServerInfo extends org.nanopub.extra.server.ServerInfo {
 	@Override
 	public int getPageSize() {
 		if (loadFromDb) {
-			pageSize = NanopubDb.get().getJournal().getPageSize();
+			pageSize = NanopubStorageFactory.getInstance().getJournal().getPageSize();
 		}
 		return super.getPageSize();
 	}
@@ -45,7 +48,7 @@ public class ServerInfo extends org.nanopub.extra.server.ServerInfo {
 	@Override
 	public long getNextNanopubNo() {
 		if (loadFromDb) {
-			nextNanopubNo = NanopubDb.get().getNextNanopubNo();
+			nextNanopubNo = NanopubStorageFactory.getInstance().getNextNanopubNo();
 		}
 		return super.getNextNanopubNo();
 	}
@@ -53,7 +56,7 @@ public class ServerInfo extends org.nanopub.extra.server.ServerInfo {
 	@Override
 	public long getJournalId() {
 		if (loadFromDb) {
-			journalId = NanopubDb.get().getJournal().getId();
+			journalId = NanopubStorageFactory.getInstance().getJournal().getJournalId();
 		}
 		return super.getJournalId();
 	}
@@ -61,7 +64,7 @@ public class ServerInfo extends org.nanopub.extra.server.ServerInfo {
 	@Override
 	public String getUriPattern() {
 		if (loadFromDb) {
-			uriPattern = NanopubDb.get().getJournal().getUriPattern();
+			uriPattern = NanopubStorageFactory.getInstance().getJournal().getUriPattern();
 		}
 		return super.getUriPattern();
 	}
@@ -69,7 +72,7 @@ public class ServerInfo extends org.nanopub.extra.server.ServerInfo {
 	@Override
 	public String getHashPattern() {
 		if (loadFromDb) {
-			hashPattern = NanopubDb.get().getJournal().getHashPattern();
+			hashPattern = NanopubStorageFactory.getInstance().getJournal().getHashPattern();
 		}
 		return super.getHashPattern();
 	}
@@ -77,10 +80,10 @@ public class ServerInfo extends org.nanopub.extra.server.ServerInfo {
 	@Override
 	public String asJson() {
 		if (loadFromDb) {
-			Journal j = NanopubDb.get().getJournal();
+			Journal j = NanopubStorageFactory.getInstance().getJournal();
 			nextNanopubNo = j.getNextNanopubNo();
 			pageSize = j.getPageSize();
-			journalId = j.getId();
+			journalId = j.getJournalId();
 			uriPattern = j.getUriPattern();
 			hashPattern = j.getHashPattern();
 		}

@@ -1,15 +1,26 @@
-package ch.tkuhn.nanopub.server;
+package ch.tkuhn.nanopub.server.storage.mongodb;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
 
+import ch.tkuhn.nanopub.server.ServerConf;
+import ch.tkuhn.nanopub.server.ServerInfo;
+import ch.tkuhn.nanopub.server.Utils;
+import ch.tkuhn.nanopub.server.storage.NanopubStorage;
+import ch.tkuhn.nanopub.server.exceptions.NanopubDbException;
+import ch.tkuhn.nanopub.server.exceptions.NotTrustyNanopubException;
+import ch.tkuhn.nanopub.server.exceptions.OversizedNanopubException;
+import ch.tkuhn.nanopub.server.exceptions.ProtectedNanopubException;
+import com.github.jsonldjava.shaded.com.google.common.base.Strings;
+import com.google.inject.Singleton;
 import org.apache.commons.io.output.NullOutputStream;
 import org.apache.commons.lang3.tuple.Pair;
 import org.apache.http.HttpResponse;
@@ -51,77 +62,30 @@ import net.trustyuri.TrustyUriUtils;
  *
  * @author Tobias Kuhn
  */
-public class NanopubDb {
-
-	public static class NotTrustyNanopubException extends Exception {
-
-		private static final long serialVersionUID = -3782872539656552144L;
-
-		public NotTrustyNanopubException(Nanopub np) {
-			super(np.getUri().toString());
-		}
-
-	}
-
-	public static class OversizedNanopubException extends Exception {
-
-		private static final long serialVersionUID = -8828914376012234462L;
-
-		public OversizedNanopubException(Nanopub np) {
-			super(np.getUri().toString());
-		}
-
-	}
-
-	public static class ProtectedNanopubException extends Exception {
-
-		private static final long serialVersionUID = 3978608156725990918L;
-
-		public ProtectedNanopubException(Nanopub np) {
-			super(np.getUri().toString());
-		}
-
-	}
-
-	public static class NanopubDbException extends Exception {
-
-		private static final long serialVersionUID = 162796031985052353L;
-
-		public NanopubDbException(String message) {
-			super(message);
-		}
-
-	}
-
-	private static final boolean logNanopubLoading = ServerConf.get().isLogNanopubLoadingEnabled();
+@Singleton
+public class NanopubStorageMongoImpl implements NanopubStorage {
+	private Logger logger = LoggerFactory.getLogger(this.getClass());
 
 	// Use trig internally to keep namespaces:
 	private static RDFFormat internalFormat = RDFFormat.TRIG;
-
-	private static NanopubDb obj;
-
-	public synchronized static NanopubDb get() {
-		if (obj == null) {
-			obj = new NanopubDb();
-		}
-		return obj;
-	}
-
-	private Logger logger = LoggerFactory.getLogger(this.getClass());
 
 	private ServerConf conf;
 	private MongoClient mongo;
 	private DB db;
 	private GridFS packageGridFs;
-	private Journal journal;
+	private JournalMongoImpl journalMongoImpl;
 
-	private NanopubDb() {
+	public NanopubStorageMongoImpl() {
+		init();
+	}
+
+	private void init() {
 		logger.info("Initialize new DB object");
-		conf = ServerConf.get();
+		conf = new ServerConf();
 		ServerAddress serverAddress = new ServerAddress(conf.getMongoDbHost(), conf.getMongoDbPort());
 		List<MongoCredential> credentials = new ArrayList<>();
 		if (conf.getMongoDbUsername() != null) {
-			credentials.add(MongoCredential.createMongoCRCredential(
+			credentials.add(MongoCredential.createCredential(
 					conf.getMongoDbUsername(),
 					conf.getMongoDbName(),
 					conf.getMongoDbPassword().toCharArray()));
@@ -129,26 +93,24 @@ public class NanopubDb {
 		mongo = new MongoClient(serverAddress, credentials);
 		db = mongo.getDB(conf.getMongoDbName());
 		packageGridFs = new GridFS(db, "packages_gzipped");
-		init();
-	}
 
-	private void init() {
 		for (String s : conf.getInitialPeers()) {
 			addPeerToCollection(s);
 		}
-		journal = new Journal(db);
+		journalMongoImpl = new JournalMongoImpl(db);
+	}
+	@Override
+	public JournalMongoImpl getJournal() {
+		return journalMongoImpl;
 	}
 
-	public Journal getJournal() {
-		return journal;
-	}
-
-	public MongoClient getMongoClient() {
-		return mongo;
-	}
+//	private MongoClient getMongoClient() {
+//		return mongo;
+//	}
 
 	private static DBObject pingCommand = new BasicDBObject("ping", "1");
 
+	@Override
 	public boolean isAccessible() {
 		try {
 			db.command(pingCommand);
@@ -162,6 +124,7 @@ public class NanopubDb {
 		return db.getCollection("nanopubs");
 	}
 
+	@Override
 	public Nanopub getNanopub(String artifactCode) {
 		BasicDBObject query = new BasicDBObject("_id", artifactCode);
 		DBCursor cursor = getNanopubCollection().find(query);
@@ -183,11 +146,13 @@ public class NanopubDb {
 		return np;
 	}
 
+	@Override
 	public boolean hasNanopub(String artifactCode) {
 		BasicDBObject query = new BasicDBObject("_id", artifactCode);
 		return getNanopubCollection().find(query).hasNext();
 	}
 
+	@Override
 	public synchronized void loadNanopub(Nanopub np) throws NotTrustyNanopubException,
 			OversizedNanopubException, NanopubDbException, ProtectedNanopubException {
 		if (np instanceof NanopubWithNs) {
@@ -220,18 +185,18 @@ public class NanopubDb {
 		BasicDBObject dbObj = new BasicDBObject("_id", artifactCode).append("nanopub", npString).append("uri", np.getUri().toString());
 		DBCollection coll = getNanopubCollection();
 		if (!coll.find(id).hasNext()) {
-			journal.checkNextNanopubNo();
-			long currentPageNo = journal.getCurrentPageNo();
-			String pageContent = journal.getPageContent(currentPageNo);
+			journalMongoImpl.checkNextNanopubNo();
+			long currentPageNo = journalMongoImpl.getCurrentPageNo();
+			String pageContent = journalMongoImpl.getPageContent(currentPageNo);
 			pageContent += np.getUri() + "\n";
 			// TODO Implement proper transactions, rollback, etc.
 			// The following three lines of code are critical. If Java gets interrupted
 			// in between, the data will remain in a slightly inconsistent state (but, I
 			// think, without serious consequences).
-			journal.increaseNextNanopubNo();
+			journalMongoImpl.increaseNextNanopubNo();
 			// If interrupted here, the current page of the journal will miss one entry
 			// (e.g. contain only 999 instead of 1000 entries).
-			journal.setPageContent(currentPageNo, pageContent);
+			journalMongoImpl.setPageContent(currentPageNo, pageContent);
 			// If interrupted here, journal will contain an entry that cannot be found in
 			// the database. This entry might be loaded later and then appear twice in the
 			// journal.
@@ -239,7 +204,7 @@ public class NanopubDb {
 		}
 		String[] postUrls = ServerConf.get().getPostUrls();
 		for (String postUrl : postUrls) {
-			if (postUrl != null && !postUrl.isEmpty()) {
+			if (!Strings.isNullOrEmpty(postUrl)) {
 				int failedTries = 0;
 				boolean success = false;
 				while (!success && failedTries < 3) {
@@ -266,15 +231,16 @@ public class NanopubDb {
 				}
 			}
 		}
-		if (logNanopubLoading) {
+		if (ServerConf.get().isLogNanopubLoadingEnabled()) {
 			logger.info("Nanopub loaded: " + np.getUri());
 		}
 	}
 
-	public DBCollection getPeerCollection() {
+	private DBCollection getPeerCollection() {
 		return db.getCollection("peers");
 	}
 
+	@Override
 	public List<String> getPeerUris() {
 		List<String> peers = new ArrayList<String>();
 		DBCursor cursor = getPeerCollection().find();
@@ -284,6 +250,7 @@ public class NanopubDb {
 		return peers;
 	}
 
+	@Override
 	public void addPeer(String peerUrl) throws ServerInfoException {
 		ServerInfo.load(peerUrl);  // throw exception if something is wrong
 		addPeerToCollection(peerUrl);
@@ -300,6 +267,7 @@ public class NanopubDb {
 		}
 	}
 
+	@Override
 	public void updatePeerState(ServerInfo peerInfo, long npno) {
 		String url = peerInfo.getPublicUrl();
 		BasicDBObject q = new BasicDBObject("_id", url);
@@ -308,6 +276,7 @@ public class NanopubDb {
 		getPeerCollection().update(q, update);
 	}
 
+	@Override
 	public Pair<Long,Long> getLastSeenPeerState(String peerUrl) {
 		BasicDBObject q = new BasicDBObject("_id", peerUrl);
 		Long journalId = null;
@@ -319,8 +288,9 @@ public class NanopubDb {
 		return Pair.of(journalId, nextNanopubNo);
 	}
 
+	@Override
 	public void populatePackageCache() throws IOException {
-		long c = journal.getCurrentPageNo();
+		long c = journalMongoImpl.getCurrentPageNo();
 		for (long page = 1; page < c; page++) {
 			if (!isPackageCached(page)) {
 				writePackageToStream(page, false, new NullOutputStream());
@@ -328,12 +298,14 @@ public class NanopubDb {
 		}
 	}
 
-	public boolean isPackageCached(long pageNo) {
+
+	private boolean isPackageCached(long pageNo) {
 		return packageGridFs.findOne(pageNo + "") != null;
 	}
 
+	@Override
 	public void writePackageToStream(long pageNo, boolean gzipped, OutputStream out) throws IOException {
-		if (pageNo < 1 || pageNo >= journal.getCurrentPageNo()) {
+		if (pageNo < 1 || pageNo >= journalMongoImpl.getCurrentPageNo()) {
 			throw new IllegalArgumentException("Not a complete page: " + pageNo);
 		}
 		GridFSDBFile f = packageGridFs.findOne(pageNo + "");
@@ -346,7 +318,7 @@ public class NanopubDb {
 				}
 				ByteArrayOutputStream bOut = new ByteArrayOutputStream();
 				packageOut = new GZIPOutputStream(bOut);
-				String pageContent = journal.getPageContent(pageNo);
+				String pageContent = journalMongoImpl.getPageContent(pageNo);
 				for (String uri : pageContent.split("\\n")) {
 					Nanopub np = getNanopub(TrustyUriUtils.getArtifactCode(uri));
 					String s;
@@ -384,13 +356,39 @@ public class NanopubDb {
 		}
 	}
 
+	@Override
 	public synchronized long getNextNanopubNo() {
-		return journal.getNextNanopubNo();
+		return journalMongoImpl.getNextNanopubNo();
 	}
 
+	@Override
 	public boolean isFull() {
 		ServerInfo info = ServerConf.getInfo();
-		return (info.getMaxNanopubs() != null && journal.getNextNanopubNo() >= info.getMaxNanopubs());
+		return (info.getMaxNanopubs() != null && journalMongoImpl.getNextNanopubNo() >= info.getMaxNanopubs());
 	}
+
+	@Override
+	public String getCid(String artifactCode){
+		return null;
+	}
+
+	@Override
+	public String testPublish(Nanopub np) {
+		long artifactMock = Instant.now().getEpochSecond();
+		String npString = null;
+		try {
+			npString = NanopubUtils.writeToString(np, internalFormat);
+		} catch (RDFHandlerException ex) {
+			throw new RuntimeException("Unexpected exception when processing nanopub", ex);
+		}
+		BasicDBObject id = new BasicDBObject("_id", artifactMock);
+		BasicDBObject dbObj = new BasicDBObject("_id", artifactMock).append("nanopub", npString).append("uri", np.getUri().toString());
+		DBCollection coll = db.getCollection("nanopubMock");
+		if (!coll.find(id).hasNext()) {
+			coll.insert(dbObj);
+		}
+		return String.valueOf(coll.getCount());
+	}
+
 
 }

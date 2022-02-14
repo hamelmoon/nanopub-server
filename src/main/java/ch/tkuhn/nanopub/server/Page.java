@@ -64,6 +64,11 @@ public abstract class Page {
 		print("<a href=\"" + artifactCode + ".nq.txt\" type=\"text/plain\">nq.txt</a>, ");
 		print("<a href=\"" + artifactCode + ".xml.txt\" type=\"text/plain\">xml.txt</a>, ");
 		print("<a href=\"" + artifactCode + ".jsonld.txt\" type=\"text/plain\">jsonld.txt</a>");
+
+		if(ServerConf.get().getStorageType().equals("ipfs")) {
+			print(", <a href=\"ipfs/" + artifactCode + "\">ipfs link</a>");
+		}
+
 		print(")</span>");
 	}
 

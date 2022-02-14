@@ -8,14 +8,19 @@ public class ServerRequest {
 	private String presentationFormat;
 	private String extension;
 	private String requestString;
-
+	private boolean isIPFSGatewayRequest;
 	public ServerRequest(HttpServletRequest httpRequest) {
 		this.httpRequest = httpRequest;
 		init();
 	}
 
 	private void init() {
-		String r = httpRequest.getServletPath().substring(1);
+		String r = httpRequest.getServletPath();
+
+		if(!httpRequest.getServletPath().isEmpty()){
+			r = r.substring(1);
+		}
+
 		if (r.endsWith(".txt")) {
 			presentationFormat = "text/plain";
 			r = r.replaceFirst("\\.txt$", "");
@@ -26,6 +31,12 @@ public class ServerRequest {
 			presentationFormat = "application/x-gzip";
 			r = r.replaceFirst("\\.gz$", "");
 		}
+
+		if(r.startsWith("ipfs")){
+			r = r.replaceFirst("ipfs/", "");
+			isIPFSGatewayRequest = true;
+		}
+
 		if (r.matches(".*\\.[a-z]{1,10}")) {
 			extension = r.replaceFirst("^.*\\.([a-z]{1,10})$", "$1");
 			requestString = r.replaceFirst("^(.*)\\.[a-z]{1,10}$", "$1");
@@ -60,6 +71,10 @@ public class ServerRequest {
 
 	public boolean hasArtifactCode() {
 		return requestString.matches("RA[A-Za-z0-9\\-_]{43}");
+	}
+
+	public boolean getIsIPFSGatewayRequest() {
+		return isIPFSGatewayRequest;
 	}
 
 	public String getArtifactCode() {
